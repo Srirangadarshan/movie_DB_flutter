@@ -144,13 +144,13 @@ class WatchlistPage extends StatelessWidget {
         itemCount: watchlist.length,
         itemBuilder: (context, index) {
           final movie = watchlist[index];
-          return _buildMovieCard(movie);
+          return _buildMovieCard(movie, context);
         },
       ),
     );
   }
 
-  Widget _buildMovieCard(Movie movie) {
+  Widget _buildMovieCard(Movie movie, BuildContext context) {
     return GestureDetector(
       onTap: () {
         Navigator.push(

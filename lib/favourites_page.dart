@@ -137,12 +137,12 @@ class FavouritesPage extends StatelessWidget {
       itemCount: favourites.length,
       itemBuilder: (context, index) {
         final movie = favourites[index];
-        return _buildMovieCard(movie);
+        return _buildMovieCard(movie, context);
       },
     );
   }
 
-  Widget _buildMovieCard(Movie movie) {
+  Widget _buildMovieCard(Movie movie, BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(

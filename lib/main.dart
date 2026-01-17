@@ -40,7 +40,7 @@ class MyApp extends StatelessWidget {
             letterSpacing: 0.5,
           ),
         ),
-        bottomNavigationBarTheme: const BottomNavigationBarTheme(
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           backgroundColor: Colors.white,
           selectedItemColor: Colors.black,
           unselectedItemColor: Colors.grey,
