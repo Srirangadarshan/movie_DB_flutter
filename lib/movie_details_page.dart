@@ -198,10 +198,6 @@ class MovieDetailsPage extends StatelessWidget {
                   _buildInfoRow('Release Date', movie.releaseDate.isNotEmpty 
                       ? _formatDate(movie.releaseDate) 
                       : 'Not available'),
-                  const SizedBox(height: 40),
-                  
-                  // Play Button
-                  _buildPlayButton(context),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -374,57 +370,6 @@ class MovieDetailsPage extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildPlayButton(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: () {
-          HapticFeedback.lightImpact();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.play_arrow, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Text('${movie.title} is now playing'),
-                ],
-              ),
-              backgroundColor: Colors.black,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              margin: const EdgeInsets.all(16),
-            ),
-          );
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.black,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 0,
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.play_arrow, size: 24),
-            SizedBox(width: 8),
-            Text(
-              'Play Now',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

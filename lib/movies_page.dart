@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import 'movie_model.dart';
 import 'movie_details_page.dart';
 
@@ -27,22 +28,67 @@ class MoviesPage extends StatefulWidget {
 
 class _MoviesPageState extends State<MoviesPage> {
   List<Movie> movies = [];
-  List<Movie> filteredMovies = [];
   bool isLoading = true;
+  bool isLoadingMore = false;
+  bool isSearching = false;
   String error = '';
+  int currentPage = 1;
+  int totalPages = 1;
+  String currentQuery = '';
+  
   TextEditingController searchController = TextEditingController();
+  ScrollController scrollController = ScrollController();
+  Timer? searchTimer;
 
   @override
   void initState() {
     super.initState();
-    fetchMovies();
-    searchController.addListener(_filterMovies);
+    fetchPopularMovies();
+    searchController.addListener(_onSearchChanged);
+    scrollController.addListener(_onScroll);
   }
 
-  Future<void> fetchMovies() async {
+  void _onSearchChanged() {
+    // Cancel previous timer
+    searchTimer?.cancel();
+    
+    // Start new timer for debounced search
+    searchTimer = Timer(const Duration(milliseconds: 500), () {
+      final query = searchController.text.trim();
+      if (query != currentQuery) {
+        currentQuery = query;
+        _performSearch();
+      }
+    });
+  }
+
+  void _performSearch() {
+    setState(() {
+      movies.clear();
+      currentPage = 1;
+      isLoading = true;
+      error = '';
+    });
+
+    if (currentQuery.isEmpty) {
+      fetchPopularMovies();
+    } else {
+      searchMovies(currentQuery);
+    }
+  }
+
+  void _onScroll() {
+    if (scrollController.position.pixels >= scrollController.position.maxScrollExtent - 200) {
+      if (!isLoadingMore && currentPage < totalPages) {
+        _loadMoreMovies();
+      }
+    }
+  }
+
+  Future<void> fetchPopularMovies() async {
     try {
       final response = await http.get(
-        Uri.parse('https://api.themoviedb.org/3/movie/popular?api_key=$apiKey'),
+        Uri.parse('https://api.themoviedb.org/3/movie/popular?api_key=$apiKey&page=$currentPage'),
       );
 
       if (response.statusCode == 200) {
@@ -50,31 +96,87 @@ class _MoviesPageState extends State<MoviesPage> {
         final List<dynamic> results = data['results'];
         
         setState(() {
-          movies = results.map((json) => Movie.fromJson(json)).toList();
-          filteredMovies = movies;
+          if (currentPage == 1) {
+            movies = results.map((json) => Movie.fromJson(json)).toList();
+          } else {
+            movies.addAll(results.map((json) => Movie.fromJson(json)).toList());
+          }
+          totalPages = data['total_pages'];
           isLoading = false;
+          isLoadingMore = false;
         });
       } else {
         setState(() {
           error = 'Failed to load movies';
           isLoading = false;
+          isLoadingMore = false;
         });
       }
     } catch (e) {
       setState(() {
         error = 'Network error occurred';
         isLoading = false;
+        isLoadingMore = false;
       });
     }
   }
 
-  void _filterMovies() {
-    final query = searchController.text.toLowerCase();
-    setState(() {
-      filteredMovies = movies
-          .where((movie) => movie.title.toLowerCase().contains(query))
-          .toList();
-    });
+  Future<void> searchMovies(String query) async {
+    try {
+      setState(() {
+        isSearching = true;
+      });
+
+      final response = await http.get(
+        Uri.parse('https://api.themoviedb.org/3/search/movie?api_key=$apiKey&query=${Uri.encodeComponent(query)}&page=$currentPage'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> results = data['results'];
+        
+        setState(() {
+          if (currentPage == 1) {
+            movies = results.map((json) => Movie.fromJson(json)).toList();
+          } else {
+            movies.addAll(results.map((json) => Movie.fromJson(json)).toList());
+          }
+          totalPages = data['total_pages'];
+          isLoading = false;
+          isLoadingMore = false;
+          isSearching = false;
+        });
+      } else {
+        setState(() {
+          error = 'Failed to search movies';
+          isLoading = false;
+          isLoadingMore = false;
+          isSearching = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        error = 'Network error occurred';
+        isLoading = false;
+        isLoadingMore = false;
+        isSearching = false;
+      });
+    }
+  }
+
+  void _loadMoreMovies() {
+    if (currentPage < totalPages) {
+      setState(() {
+        currentPage++;
+        isLoadingMore = true;
+      });
+
+      if (currentQuery.isEmpty) {
+        fetchPopularMovies();
+      } else {
+        searchMovies(currentQuery);
+      }
+    }
   }
 
   @override
@@ -92,10 +194,10 @@ class _MoviesPageState extends State<MoviesPage> {
                 children: [
                   Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Discover',
-                          style: TextStyle(
+                          currentQuery.isEmpty ? 'Discover' : 'Search Results',
+                          style: const TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
                             color: Colors.black,
@@ -110,7 +212,7 @@ class _MoviesPageState extends State<MoviesPage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          '${filteredMovies.length} movies',
+                          '${movies.length}${currentPage < totalPages ? '+' : ''} movies',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[600],
@@ -133,8 +235,25 @@ class _MoviesPageState extends State<MoviesPage> {
                     child: TextField(
                       controller: searchController,
                       decoration: InputDecoration(
-                        hintText: 'Search movies...',
-                        prefixIcon: Icon(Icons.search, color: Colors.grey[500], size: 20),
+                        hintText: 'Search movies from TMDB...',
+                        prefixIcon: isSearching 
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              )
+                            : Icon(Icons.search, color: Colors.grey[500], size: 20),
+                        suffixIcon: currentQuery.isNotEmpty
+                            ? IconButton(
+                                icon: Icon(Icons.clear, color: Colors.grey[500], size: 20),
+                                onPressed: () {
+                                  searchController.clear();
+                                },
+                              )
+                            : null,
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -162,7 +281,7 @@ class _MoviesPageState extends State<MoviesPage> {
                     )
                   : error.isNotEmpty
                       ? _buildErrorState()
-                      : filteredMovies.isEmpty
+                      : movies.isEmpty
                           ? _buildEmptyState()
                           : _buildMovieGrid(),
             ),
@@ -203,10 +322,16 @@ class _MoviesPageState extends State<MoviesPage> {
           ElevatedButton(
             onPressed: () {
               setState(() {
+                movies.clear();
+                currentPage = 1;
                 isLoading = true;
                 error = '';
               });
-              fetchMovies();
+              if (currentQuery.isEmpty) {
+                fetchPopularMovies();
+              } else {
+                searchMovies(currentQuery);
+              }
             },
             child: const Text('Try Again'),
           ),
@@ -227,7 +352,7 @@ class _MoviesPageState extends State<MoviesPage> {
           ),
           const SizedBox(height: 16),
           Text(
-            'No movies found',
+            currentQuery.isEmpty ? 'No movies found' : 'No results for "$currentQuery"',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -236,7 +361,9 @@ class _MoviesPageState extends State<MoviesPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Try adjusting your search',
+            currentQuery.isEmpty 
+                ? 'Try refreshing the page'
+                : 'Try a different search term',
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey[500],
@@ -251,15 +378,32 @@ class _MoviesPageState extends State<MoviesPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: GridView.builder(
+        controller: scrollController,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           childAspectRatio: 0.75,
           crossAxisSpacing: 12,
           mainAxisSpacing: 16,
         ),
-        itemCount: filteredMovies.length,
+        itemCount: movies.length + (isLoadingMore ? 2 : 0),
         itemBuilder: (context, index) {
-          final movie = filteredMovies[index];
+          if (index >= movies.length) {
+            // Loading indicator for pagination
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.black,
+                ),
+              ),
+            );
+          }
+          
+          final movie = movies[index];
           return _buildMovieCard(movie);
         },
       ),
@@ -468,6 +612,8 @@ class _MoviesPageState extends State<MoviesPage> {
   @override
   void dispose() {
     searchController.dispose();
+    scrollController.dispose();
+    searchTimer?.cancel();
     super.dispose();
   }
 }
